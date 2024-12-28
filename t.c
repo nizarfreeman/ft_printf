@@ -214,17 +214,26 @@ int	full_format_check(char *s)
 {
 	if (!*(s + 1))
 		return (0);
+	//printf("%c\n\n", *s);
 	while (catch_flags(s))
+	{
+		printf("%c\n", *s);
 		s++;
+	}
+	s++;
+	printf("%c\n\n", *s);
 	if (catch_specifier(*s))
 		return (1);
+	printf("%c\n\n", *s);
 	return (0);
 }
 
 void	get_flags(flags **flg, char **s)
 {
-	if (!full_format_check)
+	printf("%c\n\n", **s);
+	if (!full_format_check(*s))
 		return ;
+	(*s)++;
 	while (**s && catch_flags(*s))
 	{
 		if (**s == '+')
@@ -235,13 +244,15 @@ void	get_flags(flags **flg, char **s)
 			(*flg)->hash = 1;
 		(*s)++;
 	}
+	//printf("waaaaaaaaaaaaaaaaaaa %d\n", (*flg) -> plus_sign);
 }
 
 void	process_string(char *s, va_list r)
 {
 	va_list	  r2;
-	flags	*flg = malloc(sizeof(flags));
+	flags	*flg;
 
+	flg = malloc(sizeof(flags));
 	memset(flg, 0, sizeof(flags));
 	va_copy(r2, r);
 	while (*s)
@@ -251,7 +262,7 @@ void	process_string(char *s, va_list r)
 			get_flags(&flg, &s);
 			if (catch_specifier(*(s + 1)))
 			{
-				put_format(*(s + 1), &r2, flg);
+				put_format(*(s + 1), &r2);
 				advance_s(&s);
 			}
 			else if (*(s + 1) == '%')
@@ -268,6 +279,7 @@ void	process_string(char *s, va_list r)
 		else
 			put_(&s);
 	}
+	//printf("%d\n", (*flg) -> plus_sign);
 	free(flg);
 	va_end(r2);
 }
@@ -284,11 +296,11 @@ int	ft_printf(char *s, ...)
 	return (0);
 }
 
-int main()
+int main(void)
 {
 	int *p;
-	ft_printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
-	printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
-
+	//ft_printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
+	//printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
+	ft_printf("%+ id\n", 15);
 	//printf("|%-3d|", 0);
 }
