@@ -72,24 +72,20 @@ void	putstr_fd(char *s, int fd)
 	}
 }
 
-void	put_hex(int i, int fd)
+void	put_hex(unsigned int num, int fd)
 {
 	char			*s;
-	unsigned int	num;
 
-	num = (unsigned int)i;
 	s = "0123456789abcdef";
 	if (num > 15)
 		put_hex(num / 16, fd);
 	putchar_fd(s[num % 16], fd);
 }
 
-void	put_hex_up(int i, int fd)
+void	put_hex_up(unsigned int num, int fd)
 {
 	char			*s;
-	unsigned int	num;
 
-	num = (unsigned int)i;
 	s = "0123456789ABCDEF";
 	if (num > 15)
 		put_hex_up(num / 16, fd);
@@ -138,7 +134,28 @@ int	count_expec_formats(char *s)
 	return (count);
 }
 
-void	put_format(char c, va_list *r2)
+void	d_manager(int num, int fd, flags *flg)
+{
+	if (flg -> plus_sign && num >= 0)
+		write(1, "+", 1);
+	else if (flg -> space && num >= 0)
+		write(1, " ", 1);
+	putnbr_fd(num, fd);
+}
+
+void	Xx_manager(unsigned int num, int fd, flags *flg, char format)
+{
+	if (format == 'x' && flg -> hash)
+		write(fd, "0x", 2);
+	else if (format == 'X' && flg -> hash)
+		write(1, "0X", 2);
+	if (format == 'x')
+		put_hex(num, fd);
+	else if(format == 'X')0
+		put_hex_up(num , fd);
+}
+
+void	put_format(char c, va_list *r2, flags *flg)
 {
 	int	fd;
 
@@ -148,13 +165,11 @@ void	put_format(char c, va_list *r2)
 	else if (c == 's')
 		putstr_fd(va_arg(*r2, char *), fd);
 	else if (c == 'd' || c == 'i')
-		putnbr_fd(va_arg(*r2, int), fd);
+		d_manager(va_arg(*r2, int), fd, flg);
 	else if (c == 'u')
 		putnbr_fd_unsigned(va_arg(*r2, unsigned int), fd);
-	else if (c == 'x')
-		put_hex(va_arg(*r2, unsigned int), fd);
-	else if (c == 'X')
-		put_hex_up(va_arg(*r2, unsigned int), fd);
+	else if (c == 'x' || c == 'X')
+		Xx_manager(va_arg(*r2, unsigned int), fd, flg, c);
 	else if (c == 'p')
 		put_address(va_arg(*r2, void *), fd);
 }
@@ -214,45 +229,33 @@ int	full_format_check(char *s)
 {
 	if (!*(s + 1))
 		return (0);
-	//printf("%c\n\n", *s);
-	while (catch_flags(s))
-	{
-		printf("%c\n", *s);
-		s++;
-	}
 	s++;
-	printf("%c\n\n", *s);
-	if (catch_specifier(*s))
-		return (1);
-	printf("%c\n\n", *s);
-	return (0);
+	while (*s == '+' || *s == ' ' || *s == '#')
+		s++;
+	return (catch_specifier(*s));
 }
 
 void	get_flags(flags **flg, char **s)
 {
-	printf("%c\n\n", **s);
-	if (!full_format_check(*s))
-		return ;
 	(*s)++;
-	while (**s && catch_flags(*s))
+	while (**s && (**s == '+' || **s == ' ' || **s == '#'))
 	{
 		if (**s == '+')
-			(*flg)->plus_sign = 1;
+			(*flg) -> plus_sign = 1;
 		if (**s == ' ')
-			(*flg)->space = 1;
+			(*flg) -> space = 1;
 		if (**s == '#')
-			(*flg)->hash = 1;
+			(*flg) -> hash = 1;
 		(*s)++;
 	}
-	//printf("waaaaaaaaaaaaaaaaaaa %d\n", (*flg) -> plus_sign);
+	(*s)--;
 }
 
 void	process_string(char *s, va_list r)
 {
 	va_list	  r2;
-	flags	*flg;
+	flags	*flg = malloc(sizeof(flags));
 
-	flg = malloc(sizeof(flags));
 	memset(flg, 0, sizeof(flags));
 	va_copy(r2, r);
 	while (*s)
@@ -262,7 +265,7 @@ void	process_string(char *s, va_list r)
 			get_flags(&flg, &s);
 			if (catch_specifier(*(s + 1)))
 			{
-				put_format(*(s + 1), &r2);
+				put_format(*(s + 1), &r2, flg);
 				advance_s(&s);
 			}
 			else if (*(s + 1) == '%')
@@ -279,7 +282,6 @@ void	process_string(char *s, va_list r)
 		else
 			put_(&s);
 	}
-	//printf("%d\n", (*flg) -> plus_sign);
 	free(flg);
 	va_end(r2);
 }
@@ -294,13 +296,4 @@ int	ft_printf(char *s, ...)
 	process_string(s, r);
 	va_end(r);
 	return (0);
-}
-
-int main(void)
-{
-	int *p;
-	//ft_printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
-	//printf("%d for %% %d  %s waaaa %x 2555\n", 19, 2005, "nizar", 15);
-	ft_printf("%+ id\n", 15);
-	//printf("|%-3d|", 0);
 }
