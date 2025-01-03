@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 # define L_MAX 9223372036854775807ULL
 # define L_MIN 9223372036854775808ULL
 
@@ -14,7 +15,8 @@ typedef struct flags_struct
 	int	hash;
 	int	precision;
 	int	zero;
-	int	minus_width;
+	int	width;
+	int len;
 }	flags;
 
 /* === atoi == */
@@ -94,95 +96,99 @@ size_t	ft_strlen(const char *s)
 
 /* === atoi === */
 
-void	putchar_fd(char c, int fd)
+void	putchar_fd(char c, int fd, flags *flg)
 {
 	if (fd < 0)
 		return ;
 	write(fd, &c, 1);
+	flg -> len += 1;
 }
 
-void	putnbr_fd(int n, int fd)
+void	putnbr_fd(long long n, int fd, flags *flg)
 {
-	long	num;
+	long long	num;
 
 	if (fd < 0)
 		return ;
-	num = (long) n;
+	num = n;
 	if (num < 0)
 	{
-		putchar_fd('-', fd);
+		putchar_fd('-', fd, flg);
 		num *= -1;
 	}
 	if (num >= 10)
-		putnbr_fd(num / 10, fd);
-	putchar_fd((num % 10) + '0', fd);
+		putnbr_fd(num / 10, fd, flg);
+	putchar_fd((num % 10) + '0', fd, flg);
 }
 
-void	putnbr_fd_unsigned(unsigned int n, int fd)
+void	putnbr_fd_unsigned(unsigned int n, int fd, flags *flg)
 {
 	if (fd < 0)
 		return ;
 	if (n >= 10)
-		putnbr_fd_unsigned(n / 10, fd);
-	putchar_fd((n % 10) + '0', fd);
+		putnbr_fd_unsigned(n / 10, fd, flg);
+	putchar_fd((n % 10) + '0', fd, flg);
 }
 
-void	putstr_fd(char *s, int fd)
+void	putstr_fd(char *s, int fd, flags *flg)
 {
 	if (!s)
 	{
 		write(fd, "(null)", 6);
+		flg -> len += 6;
 		return;
 	}	
 	while (*s)
 	{
-		putchar_fd(*s, fd);
+		putchar_fd(*s, fd, flg);
 		s++;
 	}
 }
 
-void	put_hex(unsigned int num, int fd)
+void	put_hex(unsigned int num, int fd, flags *flg)
 {
 	char			*s;
 
 	s = "0123456789abcdef";
 	if (num > 15)
-		put_hex(num / 16, fd);
-	putchar_fd(s[num % 16], fd);
+		put_hex(num / 16, fd, flg);
+	putchar_fd(s[num % 16], fd, flg);
 }
 
-void	put_hex_up(unsigned int num, int fd)
+void	put_hex_up(unsigned int num, int fd, flags *flg)
 {
 	char			*s;
 
 	s = "0123456789ABCDEF";
 	if (num > 15)
-		put_hex_up(num / 16, fd);
-	putchar_fd(s[num % 16], fd);
+		put_hex_up(num / 16, fd, flg);
+	putchar_fd(s[num % 16], fd, flg);
 }
 
-void	put_hex_address(unsigned long i, int fd)
+void	put_hex_address(unsigned long i, int fd, flags* flg)
 {
 	char	*s;
 
 	s = "0123456789abcdef";
 	if (i > 15)
-		put_hex_address(i / 16, fd);
-	putchar_fd(s[i % 16], fd);
+		put_hex_address(i / 16, fd, flg);
+	putchar_fd(s[i % 16], fd, flg);
 }
 
-void	put_address(void *p, int fd)
+void	put_address(void *p, int fd, flags* flg, int zero)
 {
 	unsigned long	a;
 
 	if (p == NULL)
 	{
 		write(fd, "(nil)", 5);
+		flg -> len += 5;
 		return ;
 	}
 	a = (unsigned long)p;
 	write(fd, "0x", 2);
-	put_hex_address(a, fd);
+	flg -> len += 2;
+	put_hex_address(a, fd, flg);
 }
 
 int	count_expec_formats(char *s)
@@ -235,44 +241,109 @@ int	count_expec_hex_chars(int num)
 	return (length);
 }
 
-void	put_spaces(int num, int width, int fd)
+void	put_spaces(int num, int width, int fd, flags *flg)
 {
 	int	digits_count;
 	int	spaces;
-		
+
 	digits_count = count_digits(num, fd);
 	spaces = width - digits_count;
+	if (flg -> space || flg -> plus_sign)
+		spaces--;
 	if (num < 0)
 		spaces--;
 	while (spaces > 0)
 	{
 		write(fd, " ", 1);
+		flg -> len += 1;
 		spaces--;
 	}
 }
 
-void	d_manager(int num, int fd, flags *flg)
+int	get_digit_count(int num)
 {
-	if (flg -> plus_sign && num >= 0)
+	int	digits_count;
+	
+	if (num < 0)
+		num = -num;
+	digits_count = count_digits(num, 1);
+	return (digits_count);
+}
+
+void	put_zeros(int num, int width, int fd, flags *flg)
+{
+	int	digits_count;
+	int	zeros;
+	
+	digits_count = get_digit_count(num);
+	zeros = width - digits_count;
+	if (num < 0)
+		zeros--;
+	while (zeros > 0)
 	{
-		write(fd, "+", 1); 
-		flg -> minus_width -= 1;
-	}
-	else if (flg -> space && num >= 0)
-	{	
-		write(fd, " ", 1);
-		flg -> minus_width -= 1;
-	}
-	if (!flg -> minus_sign)
-		put_spaces(num, flg -> minus_width, fd);
-	putnbr_fd(num, fd);
-	if (flg -> minus_sign)
-	{
-		put_spaces(num, flg -> minus_width, fd);
+		write(fd, "0", 1);
+		flg -> len += 1;
+		zeros--;
 	}
 }
 
-void	put_spaces_s(char *s, int width, int fd)
+void	handle_sign(int num, int fd, flags *flg)
+{
+	if (num < 0)
+	{
+		write(fd, "-", 1);
+		flg -> len += 1;
+	}
+	else if (flg->plus_sign)
+	{
+		write(fd, "+", 1);
+		flg -> len += 1;
+		flg -> width--;
+	}
+	else if (flg->space)
+	{
+		write(fd, " ", 1);
+		flg -> len += 1;
+		flg -> width--;
+	}
+}
+
+void	print_number(int num, int fd, flags *flg)
+{
+    long number = num;
+    if (number < 0)
+        number = -number;
+    putnbr_fd(number, fd, flg);
+}
+
+void d_manager(long num, int fd, flags *flg, int specifier)
+{
+	if (specifier == 'u')
+		flg -> plus_sign = 0;
+	if (!flg->minus_sign)
+	{
+		if (flg->zero)
+		{
+			handle_sign(num, fd, flg);
+			put_zeros(num, flg->width, fd, flg);
+		}
+        else
+        {
+            put_spaces(num, flg->width, fd, flg);
+            handle_sign(num, fd, flg);
+        }
+    }
+    else
+        handle_sign(num, fd, flg);
+    if (specifier == 'u')
+        putnbr_fd_unsigned(num, fd, flg);
+    else
+        print_number(num, fd, flg);
+    if (flg->minus_sign)
+        put_spaces(num, flg->width, fd, flg);
+}
+
+void	put_spaces_s(char *s, int width, int fd, flags *flg)
 {
 	int	spaces;
 
@@ -282,26 +353,9 @@ void	put_spaces_s(char *s, int width, int fd)
 	while (spaces > 0)
 	{
 		write(fd, " ", 1);
+		flg -> len += 1;
 		spaces--;
 	}
-}
-
-void	s_manager(char *s, int fd, flags *flg)
-{
-	if (!flg -> minus_sign)
-		put_spaces_s(s, flg -> minus_width, fd);
-	putstr_fd(s, fd);
-	if (flg -> minus_sign)
-		put_spaces_s(s, flg -> minus_width, fd);
-}
-
-void	c_manager(char c, int fd, flags *flg)
-{
-	if (!flg -> minus_sign)
-		put_spaces_s("s", flg -> minus_width, fd);
-	putchar_fd(c, fd);
-	if (flg -> minus_sign)
-		put_spaces_s("s", flg -> minus_width, fd);
 }
 
 void	put_spaces_xX(int count, int width, int fd)
@@ -316,33 +370,188 @@ void	put_spaces_xX(int count, int width, int fd)
 	}
 }
 
+// void    s_manager(char *s, int fd, flags *flg)
+// {
+//     char padding = (flg->zero && !flg->minus_sign) ? '0' : ' ';
+//     int len = ft_strlen(s);
+//     int padding_len = (flg->width > len) ? flg->width - len : 0;
+
+//     if (!flg->minus_sign)
+//         while (padding_len--)
+//         {
+//             write(fd, &padding, 1);
+//             flg->len++;
+//         }
+//     putstr_fd(s, fd, flg);   
+//     if (flg->minus_sign)
+//         while (padding_len--)
+//         {
+//             write(fd, " ", 1);  // Always spaces for left alignment
+//             flg->len++;
+//         }
+// }
+
+void	s_manager(char *s, int fd, flags *flg)
+{
+	if (!flg -> minus_sign)
+		put_spaces_s(s, flg -> width, fd, flg);
+	putstr_fd(s, fd, flg);
+	if (flg -> minus_sign)
+		put_spaces_s(s, flg -> width, fd, flg);
+}
+
+void    c_manager(char c, int fd, flags *flg)
+{
+
+	flg -> zero = 0;
+    char padding = (flg->zero && !flg->minus_sign) ? '0' : ' ';
+    int padding_len = (flg->width > 1) ? flg->width - 1 : 0;
+
+    if (!flg->minus_sign)
+        while (padding_len--)
+        {
+            write(fd, &padding, 1);
+            flg->len++;
+        }
+    
+    putchar_fd(c, fd, flg);
+    
+    if (flg->minus_sign)
+        while (padding_len--)
+        {
+            write(fd, " ", 1);
+            flg->len++;
+        }
+}
+
+// void	c_manager(char c, int fd, flags *flg)
+// {
+// 	if (!flg -> minus_sign)
+// 		put_spaces_s("s", flg -> width, fd, flg);
+// 	putchar_fd(c, fd, flg);
+// 	if (flg -> minus_sign)
+// 		put_spaces_s("s", flg -> width, fd, flg);
+// }
+
+void	put_padding(int length, int width, int fd, flags *flg, char pad_char)
+{
+	int	padding;
+
+	padding = 0;
+	if (width > length)
+		padding = width - length;
+	while (padding > 0)
+	{
+		write(fd, &pad_char, 1);
+		flg->len++;
+		padding--;
+	}
+}
+
+void	handle_hash_prefix(unsigned int num, int fd, flags *flg, char format)
+{
+	if (flg->hash && num != 0)
+	{
+		if (format == 'x')
+			write(fd, "0x", 2);
+		else
+			write(fd, "0X", 2);
+		flg->len += 2;
+	}
+}
+
 void	_put_hex(unsigned int num, int fd, flags *flg, char format)
 {
-	if (format == 'x' && flg -> hash)
-		write(fd, "0x", 2);
-	else if (format == 'X' && flg -> hash)
-		write(1, "0X", 2);
 	if (format == 'x')
-		put_hex(num, fd);
-	else if(format == 'X')
-		put_hex_up(num , fd);
+		put_hex(num, fd, flg);
+	else if (format == 'X')
+		put_hex_up(num, fd, flg);
 }
 
 void	Xx_manager(unsigned int num, int fd, flags *flg, char format)
 {
-	int count;
+	int	count;
 
+	flg -> len -= 6;
 	count = count_expec_hex_chars(num);
-	if (flg -> hash)
-		count += 2;
-	if (!flg -> minus_width)
-		put_spaces_xX(count, flg -> minus_width, fd);
-	if (format == 'X')
-		put_hex_up(num, fd);
-	if (format == 'x')
-		put_hex(num, fd);
-	if (flg -> minus_width)
-		put_spaces_xX(count, flg -> minus_width, fd);
+	if (flg->hash && num != 0)
+		count += 2; // Include "0x" or "0X" prefix
+	flg->len += count;
+	if (!flg->minus_sign && (!flg->zero || !flg->hash))
+		put_padding(count, flg->width, fd, flg, ' ');
+	handle_hash_prefix(num, fd, flg, format);
+	if (!flg->minus_sign && flg->zero)
+		put_padding(count, flg->width, fd, flg, '0');
+	_put_hex(num, fd, flg, format);
+	if (flg->minus_sign)
+		put_padding(count, flg->width, fd, flg, ' ');
+}
+
+// void p_manager(void *p, flags *flg, int fd)
+// {
+//     int len;
+
+//     if (p == NULL)
+//         len = 5; // Length of "(nil)"
+//     else
+//     {
+//         len = 2; // For "0x"
+//         len += count_expec_hex_chars((unsigned long)p);
+//     }
+
+//     if (!flg->minus_sign)
+//         put_padding(len, flg->width, fd, flg, ' ');
+
+//     put_address(p, fd, flg);
+
+//     if (flg->minus_sign)
+//         put_padding(len, flg->width, fd, flg, ' ');
+// }
+
+void	put_padding_p(flags *flg, int len, int fd)
+{
+	int	zeros;
+
+	if (flg -> space)
+   	{
+   		write(1, " ", 1);
+   		flg -> len -= 1;
+   		flg -> width -= 1;
+    }
+	if (!flg -> minus_sign)
+    {
+    	if (flg -> zero)
+        {
+            zeros = flg -> width - len;
+            write(1, "0x", 2);
+            zeros -= 2;
+            while (zeros-- > 0)
+            {
+                write(fd, "0", 1);
+                flg -> len++;
+            }
+        }
+        else
+            put_spaces_xX(len, flg -> width, fd);
+    }
+}
+
+void p_manager(void *p, flags *flg, int fd)
+{
+    int len;
+
+    if (p == NULL)
+    {
+     	flg -> len += 5;
+        len = 5;
+    }
+    else
+    	len = 14;
+    put_padding_p(flg, len, fd);
+    put_address(p, fd, flg, flg -> zero);
+    if (flg -> minus_sign) 
+        put_spaces_xX(len, flg -> width, fd);
+    flg -> len += len - 14;
 }
 
 void	put_format(char c, va_list *r2, flags *flg)
@@ -355,13 +564,13 @@ void	put_format(char c, va_list *r2, flags *flg)
 	else if (c == 's')
 		s_manager(va_arg(*r2, char *), fd, flg);
 	else if (c == 'd' || c == 'i')
-		d_manager(va_arg(*r2, int), fd, flg);
+		d_manager(va_arg(*r2, long), fd, flg, c);
 	else if (c == 'u')	
-		d_manager(va_arg(*r2, unsigned int), fd, flg);
+		d_manager(va_arg(*r2, unsigned int), fd, flg, c);
 	else if (c == 'x' || c == 'X')
 		Xx_manager(va_arg(*r2, unsigned int), fd, flg, c);
 	else if (c == 'p')
-		(va_arg(*r2, void *), fd);
+		p_manager(va_arg(*r2, void *), flg, fd);
 }
 
 void	advance_s(char **s)
@@ -369,12 +578,12 @@ void	advance_s(char **s)
 	(*s) += 2;
 }
 
-void	put_(char **s)
+void	put_(char **s, flags *flg)
 {
 	int	fd;
 
 	fd = 1;
-	putchar_fd(**s, fd);
+	putchar_fd(**s, fd, flg);
 	if (!**s)
 		return ;
 	(*s)++;
@@ -414,7 +623,7 @@ void	minus_flag_manager(char **s, flags **flg)
 {
 	(*flg) -> minus_sign = 1;
 	(*s)++;
-	(*flg) -> minus_width = ft_atoi(*s);
+	(*flg) -> width = ft_atoi(*s);
 	while (**s >= '0' && **s <= '9')
 		(*s)++;
 	(*s)--;
@@ -449,17 +658,19 @@ void	get_flags(flags **flg, char **s)
 	}
 	if (**s >= '0' && **s <= '9')
 	{
-		(*flg) -> minus_width = ft_atoi(*s);
+		(*flg) -> width = ft_atoi(*s);
 		skip_width(s);
 	}
 	(*s)--;
 }
 
-void	process_string(char *s, va_list r)
+int	process_string(char *s, va_list r)
 {
 	va_list	  r2;
 	flags	*flg = malloc(sizeof(flags));
+	int	ret;
 
+	ret = 0;
 	memset(flg, 0, sizeof(flags));
 	va_copy(r2, r);
 	while (*s)
@@ -474,92 +685,45 @@ void	process_string(char *s, va_list r)
 			}
 			else if (*(s + 1) == '%')
 			{
-				putchar_fd('%', 1);
+				putchar_fd('%', 1, flg);
 				advance_s(&s);
 			}
 			else
 			{
-				putchar_fd('%', 1);
+				putchar_fd('%', 1, flg);
 				s++;
 			}
 		}
 		else
-			put_(&s);
+			put_(&s, flg);
 	}
+	ret = flg -> len;
 	free(flg);
 	va_end(r2);
+	return (ret);
 }
 
-int	ft_printf(char *s, ...)
+int ft_printf(char *s, ...)
 {
-	va_list	r;
+    va_list r;
+    int len;
 
-	if (!s)
-		return (0);
-	va_start(r, s);
-	process_string(s, r);
-	va_end(r);
-	return (0);
+    if (!s)
+        return (0);
+    va_start(r, s);
+    len = process_string(s, r);
+    va_end(r);
+    return (len);
 }
 
-int main()
+#include <limits.h>
+
+int main(int argc, char const *argv[])
 {
-	int a = 4;
-	int *p = &a;
-	ft_printf("|%-12x|\n", 255);
-	printf("|%-12x|\n",255);
-
-	//ft_printf("|%-p|\n", p);
-	return (0);
+	char ii = 'd';
+	char *p = &ii;
+	int i = ft_printf("|%020p|\n", p);
+	printf("|%020p|\n", p);
+	printf("%d\n", i - 3);
+	return 0;
 }
-
-// int main()
-// {
-//     // Basic left alignment tests
-//     printf("=== Basic Left Alignment Tests ===\n");
-//     printf("Printf:    |%-3d|\n", 42);
-//     ft_printf("ft_Printf: |%-3d|\n", 42);
-    
-//     printf("\nPrintf:    |%-5d|\n", 42);
-//     ft_printf("ft_Printf: |%-5d|\n", 42);
-    
-//     printf("\nPrintf:    |%-2d|\n", 42);
-//     ft_printf("ft_Printf: |%-2d|\n", 42);
-
-//     // Left alignment with positive numbers and plus flag
-//     printf("\n=== Left Alignment with Plus Flag ===\n");
-//     printf("Printf:    |%-+5d|\n", 42);
-//     ft_printf("ft_Printf: |%-+5d|\n", 42);
-    
-//     printf("\nPrintf:    |%-+3d|\n", 42);
-//     ft_printf("ft_Printf: |%-+3d|\n", 42);
-
-//     // Left alignment with negative numbers
-//     printf("\n=== Left Alignment with Negative Numbers ===\n");
-//     printf("Printf:    |%-5d|\n", -42);
-//     ft_printf("ft_Printf: |%-5d|\n", -42);
-    
-//     printf("\nPrintf:    |%-3d|\n", -42);
-//     ft_printf("ft_Printf: |%-3d|\n", -42);
-
-//     // Left alignment with space flag
-//     printf("\n=== Left Alignment with Space Flag ===\n");
-//     printf("Printf:    |%- 5d|\n", 42);
-//     ft_printf("ft_Printf: |%- 5d|\n", 42);
-    
-//     printf("\nPrintf:    |%- 5d|\n", -42);
-//     ft_printf("ft_Printf: |%- 5d|\n", -42);
-
-//     // Edge cases
-//     printf("\n=== Edge Cases ===\n");
-//     printf("Printf:    |%-1d|\n", 42);
-//     ft_printf("ft_Printf: |%-1d|\n", 42);
-    
-//     printf("\nPrintf:    |%-+1d|\n", 42);
-//     ft_printf("ft_Printf: |%-+1d|\n", 42);
-    
-//     printf("\nPrintf:    |%-5d|\n", 0);
-//     ft_printf("ft_Printf: |%-5d|\n", 0);
-
-//     return (0);
-// }
